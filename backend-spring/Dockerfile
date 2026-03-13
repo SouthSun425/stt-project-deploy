@@ -9,4 +9,4 @@ RUN ./gradlew bootJar --no-daemon
 
 EXPOSE 8080
 
-CMD ["java", "-jar", "build/libs/backend-spring-0.0.1-SNAPSHOT.jar"]
+CMD ["sh", "-c", "java -jar build/libs/*.jar"]
