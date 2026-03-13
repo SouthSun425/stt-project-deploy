@@ -1,0 +1,121 @@
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import LoginPage from "./pages/LoginPage";
+import SignupPage from "./pages/SignupPage";
+import UploadPage from "./pages/UploadPage";
+import AdminPage from "./pages/AdminPage";
+import { clearAuth, getUser } from "./api/auth";
+
+function RequireAuth({ children }) {
+  const user = getUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
+function RequireAdmin({ children }) {
+  const user = getUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!user.isAdmin) {
+    return <Navigate to="/upload" replace />;
+  }
+
+  return children;
+}
+
+function LoginWrapper() {
+  const navigate = useNavigate();
+
+  const handleLoginSuccess = () => {
+    navigate("/upload");
+  };
+
+  return (
+    <LoginPage
+      onLoginSuccess={handleLoginSuccess}
+      goToSignup={() => navigate("/signup")}
+    />
+  );
+}
+
+function SignupWrapper() {
+  const navigate = useNavigate();
+  return <SignupPage goToLogin={() => navigate("/login")} />;
+}
+
+function UploadWrapper() {
+  const navigate = useNavigate();
+  const user = getUser();
+
+  const handleLogout = () => {
+    clearAuth();
+    navigate("/login");
+  };
+
+  return (
+    <UploadPage
+      user={user}
+      onLogout={handleLogout}
+      goToUpload={() => navigate("/upload")}
+      goToAdmin={() => navigate("/admin")}
+    />
+  );
+}
+
+function AdminWrapper() {
+  const navigate = useNavigate();
+  const user = getUser();
+
+  const handleLogout = () => {
+    clearAuth();
+    navigate("/login");
+  };
+
+  return (
+    <AdminPage
+      user={user}
+      onLogout={handleLogout}
+      goToUpload={() => navigate("/upload")}
+      goToAdmin={() => navigate("/admin")}
+    />
+  );
+}
+
+function App() {
+  const user = getUser();
+
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={<Navigate to={user ? "/upload" : "/login"} replace />}
+      />
+      <Route path="/login" element={<LoginWrapper />} />
+      <Route path="/signup" element={<SignupWrapper />} />
+      <Route
+        path="/upload"
+        element={
+          <RequireAuth>
+            <UploadWrapper />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <RequireAdmin>
+            <AdminWrapper />
+          </RequireAdmin>
+        }
+      />
+    </Routes>
+  );
+}
+
+export default App;

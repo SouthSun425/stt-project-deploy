@@ -1,0 +1,23 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+uploads/
+
+# Node / React
+node_modules/
+dist/
+
+# Spring / Java
+.gradle/
+build/
+*.class
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
