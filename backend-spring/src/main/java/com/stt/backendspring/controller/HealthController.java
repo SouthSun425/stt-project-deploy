@@ -14,7 +14,6 @@ public class HealthController {
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("message", "Spring Boot 서버 실행 중");
-        result.put("port", 8081);
         return result;
     }
 
