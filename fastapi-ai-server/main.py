@@ -39,43 +39,71 @@ except ImportError:
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
-client = None
 
+
+client = None
 if OpenAI and OPENAI_API_KEY:
     client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 def get_allowed_origins():
     cors_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
-
     if cors_env:
         return [origin.strip() for origin in cors_env.split(",") if origin.strip()]
 
     return [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
         "http://localhost:5500",
         "http://127.0.0.1:5500",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
         "http://localhost:8080",
         "http://127.0.0.1:8080",
+        "https://frontend-react-895948831890.asia-northeast3.run.app",
     ]
 
 
 app = FastAPI(
     title="AI FastAPI Server",
     description="Whisper STT + 회원가입/로그인/관리자 API + AI 전용 API",
-    version="2.6.0"
+    version="2.6.1",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_allowed_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-API-KEY"],
 )
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "microphone=(), camera=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self' https://frontend-react-895948831890.asia-northeast3.run.app "
+        "https://backend-spring-895948831890.asia-northeast3.run.app; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    )
+    return response
+
 
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -95,20 +123,16 @@ def validate_audio_file(filename):
 
     ext = os.path.splitext(filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail="지원하지 않는 파일 형식입니다."
-        )
+        raise HTTPException(status_code=400, detail="지원하지 않는 파일 형식입니다.")
+
     return ext
 
 
 def save_upload_file(contents, ext):
     safe_filename = "{0}{1}".format(uuid.uuid4().hex, ext)
     file_path = os.path.join(UPLOAD_DIR, safe_filename)
-
     with open(file_path, "wb") as f:
         f.write(contents)
-
     return file_path
 
 
@@ -126,7 +150,7 @@ def get_today_usage_count(db, user_id):
         .filter(
             UsageLog.user_id == user_id,
             func.date(UsageLog.created_at) == func.current_date(),
-            UsageLog.status == "success"
+            UsageLog.status == "success",
         )
         .scalar()
     )
@@ -150,7 +174,7 @@ def check_user_can_use_stt(db, user):
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     token = credentials.credentials
 
@@ -180,7 +204,7 @@ def verify_internal_api_key(x_api_key: str = Header(None)):
     if not INTERNAL_API_KEY:
         raise HTTPException(
             status_code=500,
-            detail="INTERNAL_API_KEY 환경변수가 설정되지 않았습니다."
+            detail="INTERNAL_API_KEY 환경변수가 설정되지 않았습니다.",
         )
 
     if not x_api_key:
@@ -194,11 +218,14 @@ def generate_summary(text):
     if not text or not text.strip():
         return {
             "summary": "",
-            "keywords": []
+            "keywords": [],
         }
 
     if client is None:
-        raise HTTPException(status_code=503, detail="AI 요약 서비스를 현재 사용할 수 없습니다.")
+        raise HTTPException(
+            status_code=503,
+            detail="AI 요약 서비스를 현재 사용할 수 없습니다.",
+        )
 
     prompt = (
         "다음 음성 변환 텍스트를 읽고 아래 형식으로 정리해줘.\n"
@@ -219,18 +246,17 @@ def generate_summary(text):
             messages=[
                 {
                     "role": "system",
-                    "content": "너는 음성 변환 결과를 간결하고 명확하게 정리하는 도우미다."
+                    "content": "너는 음성 변환 결과를 간결하고 명확하게 정리하는 도우미다.",
                 },
                 {
                     "role": "user",
-                    "content": prompt
-                }
+                    "content": prompt,
+                },
             ],
-            temperature=0.2
+            temperature=0.2,
         )
 
         content = response.choices[0].message.content.strip()
-
         summary = content
         keywords = []
 
@@ -244,7 +270,7 @@ def generate_summary(text):
 
         return {
             "summary": summary,
-            "keywords": keywords
+            "keywords": keywords,
         }
 
     except Exception:
@@ -278,7 +304,7 @@ def stt_page(request: Request):
 
 @app.get("/health")
 def health():
-    return {"message": "FastAPI 서버 실행 중"}
+    return {"status": "ok"}
 
 
 @app.post("/signup")
@@ -294,7 +320,7 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
         is_active=True,
         can_use_stt=False,
         is_unlimited=False,
-        daily_limit=10
+        daily_limit=10,
     )
 
     db.add(new_user)
@@ -303,7 +329,7 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
 
     return {
         "message": "회원가입 완료",
-        "email": new_user.email
+        "email": new_user.email,
     }
 
 
@@ -311,20 +337,29 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
 def login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user.email).first()
     if not db_user:
-        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
+        raise HTTPException(
+            status_code=401,
+            detail="이메일 또는 비밀번호가 올바르지 않습니다.",
+        )
 
     try:
         password_ok = verify_password(user.password, db_user.password_hash)
     except Exception:
-        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
+        raise HTTPException(
+            status_code=401,
+            detail="이메일 또는 비밀번호가 올바르지 않습니다.",
+        )
 
     if not password_ok:
-        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
+        raise HTTPException(
+            status_code=401,
+            detail="이메일 또는 비밀번호가 올바르지 않습니다.",
+        )
 
     access_token = create_access_token(
         data={
             "sub": db_user.email,
-            "is_admin": db_user.is_admin
+            "is_admin": db_user.is_admin,
         }
     )
 
@@ -337,7 +372,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         "is_active": db_user.is_active,
         "can_use_stt": db_user.can_use_stt,
         "is_unlimited": db_user.is_unlimited,
-        "daily_limit": db_user.daily_limit
+        "daily_limit": db_user.daily_limit,
     }
 
 
@@ -349,42 +384,44 @@ def get_me(current_user: User = Depends(get_current_user)):
         "is_active": current_user.is_active,
         "can_use_stt": current_user.can_use_stt,
         "is_unlimited": current_user.is_unlimited,
-        "daily_limit": current_user.daily_limit
+        "daily_limit": current_user.daily_limit,
     }
 
 
 @app.get("/my/usage/today")
 def get_my_today_usage(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     today_count = get_today_usage_count(db, current_user.id)
     return {
         "email": current_user.email,
         "today_usage_count": today_count,
         "daily_limit": current_user.daily_limit,
-        "is_unlimited": current_user.is_unlimited
+        "is_unlimited": current_user.is_unlimited,
     }
 
 
 @app.get("/admin/users")
 def get_users(
     admin_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     users = db.query(User).all()
     result = []
 
     for user in users:
-        result.append({
-            "id": user.id,
-            "email": user.email,
-            "is_admin": user.is_admin,
-            "is_active": user.is_active,
-            "can_use_stt": user.can_use_stt,
-            "is_unlimited": user.is_unlimited,
-            "daily_limit": user.daily_limit
-        })
+        result.append(
+            {
+                "id": user.id,
+                "email": user.email,
+                "is_admin": user.is_admin,
+                "is_active": user.is_active,
+                "can_use_stt": user.can_use_stt,
+                "is_unlimited": user.is_unlimited,
+                "daily_limit": user.daily_limit,
+            }
+        )
 
     return result
 
@@ -393,7 +430,7 @@ def get_users(
 def enable_user(
     email: str = Body(..., embed=True),
     admin_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -406,7 +443,7 @@ def enable_user(
     return {
         "message": "사용자 STT 사용 승인 완료",
         "email": user.email,
-        "can_use_stt": user.can_use_stt
+        "can_use_stt": user.can_use_stt,
     }
 
 
@@ -414,7 +451,7 @@ def enable_user(
 def disable_user(
     email: str = Body(..., embed=True),
     admin_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -427,7 +464,7 @@ def disable_user(
     return {
         "message": "사용자 STT 사용 차단 완료",
         "email": user.email,
-        "can_use_stt": user.can_use_stt
+        "can_use_stt": user.can_use_stt,
     }
 
 
@@ -435,7 +472,7 @@ def disable_user(
 def set_unlimited_user(
     email: str = Body(..., embed=True),
     admin_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -449,7 +486,7 @@ def set_unlimited_user(
     return {
         "message": "무제한 사용자 설정 완료",
         "email": user.email,
-        "is_unlimited": user.is_unlimited
+        "is_unlimited": user.is_unlimited,
     }
 
 
@@ -458,7 +495,7 @@ def set_limited_user(
     email: str = Body(..., embed=True),
     daily_limit: int = Body(..., embed=True),
     admin_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -477,26 +514,28 @@ def set_limited_user(
         "message": "일일 제한 사용자 설정 완료",
         "email": user.email,
         "is_unlimited": user.is_unlimited,
-        "daily_limit": user.daily_limit
+        "daily_limit": user.daily_limit,
     }
 
 
 @app.get("/admin/usage/today")
 def get_today_usage(
     admin_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     users = db.query(User).all()
     result = []
 
     for user in users:
         today_count = get_today_usage_count(db, user.id)
-        result.append({
-            "email": user.email,
-            "today_usage_count": today_count,
-            "daily_limit": user.daily_limit,
-            "is_unlimited": user.is_unlimited
-        })
+        result.append(
+            {
+                "email": user.email,
+                "today_usage_count": today_count,
+                "daily_limit": user.daily_limit,
+                "is_unlimited": user.is_unlimited,
+            }
+        )
 
     return result
 
@@ -505,13 +544,13 @@ def get_today_usage(
 async def transcribe_audio(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     check_user_can_use_stt(db, current_user)
 
     ext = validate_audio_file(file.filename)
-
     contents = await file.read()
+
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="파일 크기가 제한을 초과했습니다.")
 
@@ -526,13 +565,13 @@ async def transcribe_audio(
         with open(file_path, "rb") as audio_file:
             transcript = client.audio.transcriptions.create(
                 model="gpt-4o-mini-transcribe",
-                file=audio_file
+                file=audio_file,
             )
 
         usage_log = UsageLog(
             user_id=current_user.id,
             file_name=file.filename,
-            status="success"
+            status="success",
         )
         db.add(usage_log)
         db.commit()
@@ -541,23 +580,20 @@ async def transcribe_audio(
             "message": "STT 변환 완료",
             "email": current_user.email,
             "filename": file.filename,
-            "text": transcript.text
+            "text": transcript.text,
         }
 
     except HTTPException:
         raise
-
     except Exception:
         usage_log = UsageLog(
             user_id=current_user.id,
             file_name=file.filename,
-            status="failed"
+            status="failed",
         )
         db.add(usage_log)
         db.commit()
-
         raise HTTPException(status_code=500, detail="STT 처리 중 오류가 발생했습니다.")
-
     finally:
         remove_file_safely(file_path)
 
@@ -565,13 +601,13 @@ async def transcribe_audio(
 @app.post("/api/stt/process")
 async def process_stt_with_summary(
     file: UploadFile = File(...),
-    x_api_key: str = Header(None)
+    x_api_key: str = Header(None),
 ):
     verify_internal_api_key(x_api_key)
 
     ext = validate_audio_file(file.filename)
-
     contents = await file.read()
+
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="파일 크기가 제한을 초과했습니다.")
 
@@ -586,7 +622,7 @@ async def process_stt_with_summary(
         with open(file_path, "rb") as audio_file:
             transcript = client.audio.transcriptions.create(
                 model="gpt-4o-mini-transcribe",
-                file=audio_file
+                file=audio_file,
             )
 
         text = transcript.text if transcript and transcript.text else ""
@@ -597,14 +633,15 @@ async def process_stt_with_summary(
             "filename": file.filename,
             "text": text,
             "summary": summary_result["summary"],
-            "keywords": summary_result["keywords"]
+            "keywords": summary_result["keywords"],
         }
 
     except HTTPException:
         raise
-
     except Exception:
-        raise HTTPException(status_code=500, detail="STT + 요약 처리 중 오류가 발생했습니다.")
-
+        raise HTTPException(
+            status_code=500,
+            detail="STT + 요약 처리 중 오류가 발생했습니다.",
+        )
     finally:
         remove_file_safely(file_path)
