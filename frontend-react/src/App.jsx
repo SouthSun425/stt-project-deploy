@@ -46,6 +46,7 @@ function LoginWrapper() {
 
 function SignupWrapper() {
   const navigate = useNavigate();
+
   return <SignupPage goToLogin={() => navigate("/login")} />;
 }
 
@@ -93,11 +94,13 @@ function App() {
   return (
     <Routes>
       <Route
-        path="/"
-        element={<Navigate to={user ? "/upload" : "/login"} replace />}
+        path="/login"
+        element={user ? <Navigate to="/upload" replace /> : <LoginWrapper />}
       />
-      <Route path="/login" element={<LoginWrapper />} />
-      <Route path="/signup" element={<SignupWrapper />} />
+      <Route
+        path="/signup"
+        element={user ? <Navigate to="/upload" replace /> : <SignupWrapper />}
+      />
       <Route
         path="/upload"
         element={
@@ -114,6 +117,7 @@ function App() {
           </RequireAdmin>
         }
       />
+      <Route path="*" element={<Navigate to={user ? "/upload" : "/login"} replace />} />
     </Routes>
   );
 }
