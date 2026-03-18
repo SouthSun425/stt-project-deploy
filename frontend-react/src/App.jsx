@@ -33,6 +33,11 @@ function LoginWrapper() {
   const navigate = useNavigate();
 
   const handleLoginSuccess = () => {
+    const user = getUser();
+    if (user?.isAdmin) {
+      navigate("/admin");
+      return;
+    }
     navigate("/upload");
   };
 
@@ -56,7 +61,7 @@ function UploadWrapper() {
 
   const handleLogout = () => {
     clearAuth();
-    navigate("/login");
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -75,7 +80,7 @@ function AdminWrapper() {
 
   const handleLogout = () => {
     clearAuth();
-    navigate("/login");
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -95,11 +100,11 @@ function App() {
     <Routes>
       <Route
         path="/login"
-        element={user ? <Navigate to="/upload" replace /> : <LoginWrapper />}
+        element={user ? <Navigate to={user.isAdmin ? "/admin" : "/upload"} replace /> : <LoginWrapper />}
       />
       <Route
         path="/signup"
-        element={user ? <Navigate to="/upload" replace /> : <SignupWrapper />}
+        element={user ? <Navigate to={user.isAdmin ? "/admin" : "/upload"} replace /> : <SignupWrapper />}
       />
       <Route
         path="/upload"
@@ -117,7 +122,10 @@ function App() {
           </RequireAdmin>
         }
       />
-      <Route path="*" element={<Navigate to={user ? "/upload" : "/login"} replace />} />
+      <Route
+        path="*"
+        element={<Navigate to={user ? (user.isAdmin ? "/admin" : "/upload") : "/login"} replace />}
+      />
     </Routes>
   );
 }

@@ -56,7 +56,7 @@ function StatusBadge({ text, type = "default" }) {
   );
 }
 
-function ActionButton({ children, onClick, variant = "default" }) {
+function ActionButton({ children, onClick, variant = "default", disabled = false }) {
   const styleMap = {
     default: {
       backgroundColor: "#ffffff",
@@ -89,12 +89,14 @@ function ActionButton({ children, onClick, variant = "default" }) {
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       style={{
         padding: "8px 12px",
         borderRadius: "10px",
         fontSize: "13px",
         fontWeight: 600,
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.6 : 1,
         transition: "all 0.15s ease",
         ...styleMap[variant],
       }}
@@ -166,6 +168,7 @@ function AdminPage({ user, onLogout, goToUpload, goToAdmin }) {
   const [keyword, setKeyword] = useState("");
   const [limitInputs, setLimitInputs] = useState({});
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState("");
 
   const loadAll = async (searchKeyword = "") => {
     try {
@@ -219,34 +222,42 @@ function AdminPage({ user, onLogout, goToUpload, goToAdmin }) {
     await loadAll(keyword);
   };
 
-  const handleEnable = async (email) => {
+  const runAction = async (key, action, successFallback) => {
     try {
-      await enableUser(email);
-      setMessage("승인 완료");
+      setActionLoading(key);
+      setMessage("");
+      const result = await action();
+      setMessage(result?.message || successFallback);
       await loadAll(keyword);
     } catch (error) {
-      setMessage(error.message || "승인 중 오류가 발생했습니다.");
+      setMessage(error.message || "요청 처리 중 오류가 발생했습니다.");
+    } finally {
+      setActionLoading("");
     }
+  };
+
+  const handleEnable = async (email) => {
+    await runAction(
+      `enable:${email}`,
+      () => enableUser(email),
+      "승인 완료"
+    );
   };
 
   const handleDisable = async (email) => {
-    try {
-      await disableUser(email);
-      setMessage("차단 완료");
-      await loadAll(keyword);
-    } catch (error) {
-      setMessage(error.message || "차단 중 오류가 발생했습니다.");
-    }
+    await runAction(
+      `disable:${email}`,
+      () => disableUser(email),
+      "차단 완료"
+    );
   };
 
   const handleUnlock = async (email) => {
-    try {
-      await unlockUser(email);
-      setMessage("잠금 해제 완료");
-      await loadAll(keyword);
-    } catch (error) {
-      setMessage(error.message || "잠금 해제 중 오류가 발생했습니다.");
-    }
+    await runAction(
+      `unlock:${email}`,
+      () => unlockUser(email),
+      "제한 해제 완료"
+    );
   };
 
   const handleLimitChange = (email, value) => {
@@ -257,22 +268,32 @@ function AdminPage({ user, onLogout, goToUpload, goToAdmin }) {
   };
 
   const handleUpdateLimit = async (email) => {
-    try {
-      const dailyLimit = Number(limitInputs[email]);
-      await updateDailyLimit(email, dailyLimit);
-      setMessage("일일 한도 수정 완료");
-      await loadAll(keyword);
-    } catch (error) {
-      setMessage(error.message || "일일 한도 수정 중 오류가 발생했습니다.");
+    const rawValue = limitInputs[email];
+
+    if (rawValue === "" || rawValue === null || rawValue === undefined) {
+      setMessage("일일 한도를 입력해주세요.");
+      return;
     }
+
+    const dailyLimit = Number(rawValue);
+
+    if (!Number.isInteger(dailyLimit) || dailyLimit < 1) {
+      setMessage("일일 한도는 1 이상의 숫자여야 합니다.");
+      return;
+    }
+
+    await runAction(
+      `limit:${email}`,
+      () => updateDailyLimit(email, dailyLimit),
+      "일일 한도 수정 완료"
+    );
   };
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        background:
-          "linear-gradient(180deg, #f8fafc 0%, #eef2f6 100%)",
+        background: "linear-gradient(180deg, #f8fafc 0%, #eef2f6 100%)",
       }}
     >
       <Header
@@ -473,108 +494,117 @@ function AdminPage({ user, onLogout, goToUpload, goToAdmin }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map((userItem) => (
-                      <tr
-                        key={userItem.email}
-                        style={{ borderBottom: "1px solid #f2f4f7" }}
-                      >
-                        <td style={tdStyle}>
-                          <div style={{ fontWeight: 600, color: "#101828" }}>
-                            {userItem.email}
-                          </div>
-                        </td>
-                        <td style={tdStyle}>
-                          {userItem.admin ? (
-                            <StatusBadge text="관리자" type="admin" />
-                          ) : (
-                            <StatusBadge text="일반 사용자" />
-                          )}
-                        </td>
-                        <td style={tdStyle}>
-                          {userItem.active ? (
-                            <StatusBadge text="활성" type="success" />
-                          ) : (
-                            <StatusBadge text="비활성" type="danger" />
-                          )}
-                        </td>
-                        <td style={tdStyle}>
-                          {userItem.canUseStt ? (
-                            <StatusBadge text="가능" type="success" />
-                          ) : (
-                            <StatusBadge text="불가" type="warning" />
-                          )}
-                        </td>
-                        <td style={tdStyle}>
-                          {userItem.accountLocked ? (
-                            <StatusBadge text="잠김" type="danger" />
-                          ) : (
-                            <StatusBadge text="정상" type="success" />
-                          )}
-                        </td>
-                        <td style={tdStyle}>
-                          {userItem.lockUntil || "-"}
-                        </td>
-                        <td style={tdStyle}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                            }}
-                          >
-                            <input
-                              type="number"
-                              value={
-                                limitInputs[userItem.email] ?? userItem.dailyLimit
-                              }
-                              onChange={(e) =>
-                                handleLimitChange(userItem.email, e.target.value)
-                              }
+                    {users.map((userItem) => {
+                      const limitBusy = actionLoading === `limit:${userItem.email}`;
+                      const enableBusy = actionLoading === `enable:${userItem.email}`;
+                      const disableBusy = actionLoading === `disable:${userItem.email}`;
+                      const unlockBusy = actionLoading === `unlock:${userItem.email}`;
+                      const isBusy = limitBusy || enableBusy || disableBusy || unlockBusy;
+
+                      return (
+                        <tr
+                          key={userItem.email}
+                          style={{ borderBottom: "1px solid #f2f4f7" }}
+                        >
+                          <td style={tdStyle}>
+                            <div style={{ fontWeight: 600, color: "#101828" }}>
+                              {userItem.email}
+                            </div>
+                          </td>
+                          <td style={tdStyle}>
+                            {userItem.admin ? (
+                              <StatusBadge text="관리자" type="admin" />
+                            ) : (
+                              <StatusBadge text="일반 사용자" />
+                            )}
+                          </td>
+                          <td style={tdStyle}>
+                            {userItem.active ? (
+                              <StatusBadge text="활성" type="success" />
+                            ) : (
+                              <StatusBadge text="비활성" type="danger" />
+                            )}
+                          </td>
+                          <td style={tdStyle}>
+                            {userItem.canUseStt ? (
+                              <StatusBadge text="가능" type="success" />
+                            ) : (
+                              <StatusBadge text="불가" type="warning" />
+                            )}
+                          </td>
+                          <td style={tdStyle}>
+                            {userItem.accountLocked ? (
+                              <StatusBadge text="잠김" type="danger" />
+                            ) : (
+                              <StatusBadge text="정상" type="success" />
+                            )}
+                          </td>
+                          <td style={tdStyle}>{userItem.lockUntil || "-"}</td>
+                          <td style={tdStyle}>
+                            <div
                               style={{
-                                width: "90px",
-                                padding: "8px 10px",
-                                borderRadius: "10px",
-                                border: "1px solid #d0d5dd",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
                               }}
-                            />
-                            <ActionButton
-                              variant="primary"
-                              onClick={() => handleUpdateLimit(userItem.email)}
                             >
-                              저장
-                            </ActionButton>
-                          </div>
-                        </td>
-                        <td style={tdStyle}>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: "8px",
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <ActionButton
-                              variant="success"
-                              onClick={() => handleEnable(userItem.email)}
+                              <input
+                                type="number"
+                                min="1"
+                                value={limitInputs[userItem.email] ?? userItem.dailyLimit}
+                                onChange={(e) =>
+                                  handleLimitChange(userItem.email, e.target.value)
+                                }
+                                style={{
+                                  width: "90px",
+                                  padding: "8px 10px",
+                                  borderRadius: "10px",
+                                  border: "1px solid #d0d5dd",
+                                }}
+                              />
+                              <ActionButton
+                                variant="primary"
+                                onClick={() => handleUpdateLimit(userItem.email)}
+                                disabled={isBusy}
+                              >
+                                {limitBusy ? "저장 중..." : "저장"}
+                              </ActionButton>
+                            </div>
+                          </td>
+                          <td style={tdStyle}>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: "8px",
+                                flexWrap: "wrap",
+                              }}
                             >
-                              승인
-                            </ActionButton>
-                            <ActionButton
-                              variant="danger"
-                              onClick={() => handleDisable(userItem.email)}
-                            >
-                              차단
-                            </ActionButton>
-                            <ActionButton
-                              variant="warning"
-                              onClick={() => handleUnlock(userItem.email)}
-                            >
-                              잠금 해제
-                            </ActionButton>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              <ActionButton
+                                variant="success"
+                                onClick={() => handleEnable(userItem.email)}
+                                disabled={isBusy}
+                              >
+                                {enableBusy ? "처리 중..." : "승인"}
+                              </ActionButton>
+                              <ActionButton
+                                variant="danger"
+                                onClick={() => handleDisable(userItem.email)}
+                                disabled={isBusy}
+                              >
+                                {disableBusy ? "처리 중..." : "차단"}
+                              </ActionButton>
+                              <ActionButton
+                                variant="warning"
+                                onClick={() => handleUnlock(userItem.email)}
+                                disabled={isBusy}
+                              >
+                                {unlockBusy ? "처리 중..." : "제한 해제"}
+                              </ActionButton>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
