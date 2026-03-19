@@ -37,20 +37,20 @@ export async function login(email, password) {
 }
 
 export function saveAuth(data) {
-  localStorage.setItem("accessToken", data.accessToken);
-  localStorage.setItem("user", JSON.stringify(data.user));
+  sessionStorage.setItem("accessToken", data.accessToken);
+  sessionStorage.setItem("user", JSON.stringify(data.user));
 }
 
 export function clearAuth() {
-  localStorage.removeItem("accessToken");
-  localStorage.removeItem("user");
+  sessionStorage.removeItem("accessToken");
+  sessionStorage.removeItem("user");
 }
 
 export function getAccessToken() {
-  return localStorage.getItem("accessToken");
+  return sessionStorage.getItem("accessToken");
 }
 
 export function getUser() {
-  const savedUser = localStorage.getItem("user");
+  const savedUser = sessionStorage.getItem("user");
   return savedUser ? JSON.parse(savedUser) : null;
 }
