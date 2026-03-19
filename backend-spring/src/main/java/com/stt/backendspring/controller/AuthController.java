@@ -14,7 +14,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
@@ -32,9 +36,9 @@ public class AuthController {
     private String allowedDomainsRaw;
 
     public AuthController(
-            UserRepository userRepository,
-            BCryptPasswordEncoder passwordEncoder,
-            JwtTokenProvider jwtTokenProvider
+        UserRepository userRepository,
+        BCryptPasswordEncoder passwordEncoder,
+        JwtTokenProvider jwtTokenProvider
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -47,13 +51,13 @@ public class AuthController {
 
         if (userRepository.existsByEmail(request.getEmail())) {
             result.put("success", false);
-            result.put("message", "이미 가입된 이메일입니다.");
+            result.put("message", "회원가입에 실패했습니다.");
             return ResponseEntity.badRequest().body(result);
         }
 
         if (!isAllowedDomain(request.getEmail())) {
             result.put("success", false);
-            result.put("message", "허용되지 않은 이메일 도메인입니다.");
+            result.put("message", "회원가입이 허용되지 않은 이메일입니다.");
             return ResponseEntity.badRequest().body(result);
         }
 
@@ -84,6 +88,7 @@ public class AuthController {
         Map<String, Object> result = new HashMap<>();
 
         Optional<User> optionalUser = userRepository.findByEmail(request.getEmail());
+
         if (optionalUser.isEmpty()) {
             result.put("success", false);
             result.put("message", "이메일 또는 비밀번호가 올바르지 않습니다.");
@@ -95,9 +100,7 @@ public class AuthController {
         if (user.isAccountLocked()) {
             if (user.getLockUntil() != null && LocalDateTime.now().isBefore(user.getLockUntil())) {
                 result.put("success", false);
-                result.put("message", "로그인 실패 5회로 계정이 잠겼습니다.");
-                result.put("detail", "10분 후 다시 시도하거나 관리자에게 잠금 해제를 요청하세요.");
-                result.put("lockUntil", user.getLockUntil().toString());
+                result.put("message", "로그인할 수 없습니다. 잠시 후 다시 시도해주세요.");
                 return ResponseEntity.status(HttpStatus.LOCKED).body(result);
             } else {
                 user.setAccountLocked(false);
@@ -109,7 +112,7 @@ public class AuthController {
 
         if (!user.isActive()) {
             result.put("success", false);
-            result.put("message", "비활성화된 계정입니다.");
+            result.put("message", "로그인할 수 없습니다.");
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(result);
         }
 
@@ -125,17 +128,12 @@ public class AuthController {
             userRepository.save(user);
 
             result.put("success", false);
+            result.put("message", "이메일 또는 비밀번호가 올바르지 않습니다.");
+
             if (failCount >= MAX_LOGIN_FAIL_COUNT) {
-                result.put("message", "로그인 실패 5회로 계정이 잠겼습니다.");
-                result.put("detail", "10분 후 다시 시도하거나 관리자에게 잠금 해제를 요청하세요.");
-                result.put("failedLoginCount", failCount);
-                result.put("lockUntil", user.getLockUntil() != null ? user.getLockUntil().toString() : null);
                 return ResponseEntity.status(HttpStatus.LOCKED).body(result);
             }
 
-            result.put("message", "이메일 또는 비밀번호가 올바르지 않습니다.");
-            result.put("detail", "로그인 실패 횟수: " + failCount + "/" + MAX_LOGIN_FAIL_COUNT);
-            result.put("failedLoginCount", failCount);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
         }
 
@@ -147,22 +145,22 @@ public class AuthController {
         String token = jwtTokenProvider.createToken(user.getEmail(), user.isAdmin());
 
         return ResponseEntity.ok(
-                LoginResponse.of(
-                        "로그인 성공",
-                        token,
-                        user.getEmail(),
-                        user.isAdmin(),
-                        user.isActive(),
-                        user.isCanUseStt(),
-                        user.isUnlimited(),
-                        user.getDailyLimit()
-                )
+            LoginResponse.of(
+                "로그인 성공",
+                token,
+                user.getEmail(),
+                user.isAdmin(),
+                user.isActive(),
+                user.isCanUseStt(),
+                user.isUnlimited(),
+                user.getDailyLimit()
+            )
         );
     }
 
     private boolean isAllowedDomain(String email) {
         if (allowedDomainsRaw == null || allowedDomainsRaw.isBlank()) {
-            return true;
+            return false;
         }
 
         int atIndex = email.lastIndexOf("@");
@@ -173,10 +171,10 @@ public class AuthController {
         String domain = email.substring(atIndex + 1).toLowerCase();
 
         Set<String> allowedDomains = Arrays.stream(allowedDomainsRaw.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isBlank())
-                .map(String::toLowerCase)
-                .collect(Collectors.toSet());
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .map(String::toLowerCase)
+            .collect(Collectors.toSet());
 
         return allowedDomains.contains(domain);
     }
