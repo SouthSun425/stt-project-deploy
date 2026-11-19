@@ -1,35 +1,6 @@
+import { Icon } from "./Icons";
+
 function Header({ user, onLogout, goToUpload, goToAdmin }) {
-  return (
-    <header className="app-header">
-      <div className="app-header-left">
-        <h1 className="app-logo">STT Service</h1>
-      </div>
-
-      <div className="app-header-center">
-        <button className="nav-button" onClick={goToUpload}>
-          업로드
-        </button>
-
-        {user?.isAdmin && (
-          <button className="nav-button" onClick={goToAdmin}>
-            관리자
-          </button>
-        )}
-      </div>
-
-      <div className="app-header-right">
-        <div className="user-info">
-          <span className="user-email">{user?.email}</span>
-          <span className="user-role">
-            {user?.isAdmin ? "관리자" : "일반 사용자"}
-          </span>
-        </div>
-        <button className="logout-button" onClick={onLogout}>
-          로그아웃
-        </button>
-      </div>
-    </header>
-  );
+  return <header className="topbar"><button className="brand" onClick={goToUpload} aria-label="업로드 홈"><span className="brand-mark"><Icon name="wave" size={22}/></span><span>VoiceFlow <b>AI</b></span></button><nav className="topnav" aria-label="주 메뉴"><button className="nav-link" onClick={goToUpload}><Icon name="upload" size={17}/>업로드</button>{user?.isAdmin&&<button className="nav-link" onClick={goToAdmin}><Icon name="users" size={17}/>관리자</button>}</nav><div className="account-area"><div className="avatar">{user?.email?.[0]?.toUpperCase()||"U"}</div><div className="account-copy"><strong>{user?.email}</strong><span>{user?.isAdmin?"Administrator":"Member"}</span></div><button className="icon-button" onClick={onLogout} title="로그아웃"><Icon name="logout" size={19}/></button></div></header>;
 }
-
 export default Header;

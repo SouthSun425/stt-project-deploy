@@ -1,167 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { uploadAudio } from "../api/stt";
 import { apiFetch } from "../api/client";
 import Header from "../components/Header";
+import { Icon } from "../components/Icons";
 
-function UploadPage({ user, onLogout, goToAdmin, goToUpload }) {
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [usage, setUsage] = useState(null);
-
-  const loadUsage = async () => {
-    try {
-      const data = await apiFetch("/api/stt/usage", {
-        method: "GET",
-      });
-      setUsage(data);
-    } catch (error) {
-      setMessage(error.message);
-    }
-  };
-
-  useEffect(() => {
-    loadUsage();
-  }, []);
-
-  const handleFileChange = (e) => {
-    setSelectedFile(e.target.files[0]);
-    setResult(null);
-    setMessage("");
-  };
-
-  const handleUpload = async () => {
-    if (!user?.canUseStt) {
-      setMessage("현재 STT 사용 권한이 없습니다. 관리자 승인 후 이용 가능합니다.");
-      return;
-    }
-
-    if (!selectedFile) {
-      setMessage("음성 파일을 선택해주세요.");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setMessage("");
-      const data = await uploadAudio(selectedFile);
-      setResult(data);
-      setUsage({
-        email: user.email,
-        dailyLimit: data.dailyLimit,
-        todayUsedCount: data.todayUsedCount,
-        remainingCount: data.remainingCount,
-        canUseStt: user.canUseStt,
-        unlimited: user.isUnlimited,
-      });
-      setMessage("처리 완료");
-    } catch (error) {
-      const text = error.message || "";
-
-      if (
-        text.includes("오늘 사용 한도를 초과했습니다") ||
-        text.includes("오늘 사용 한도") ||
-        text.includes("remainingCount")
-      ) {
-        alert("오늘 사용 한도를 모두 사용했습니다.");
-        setMessage("오늘 사용 한도를 모두 사용했습니다.");
-      } else {
-        setMessage(text);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const copyText = async (text, label) => {
-    try {
-      await navigator.clipboard.writeText(text || "");
-      setMessage(`${label} 복사 완료`);
-    } catch (error) {
-      setMessage(`${label} 복사 실패`);
-    }
-  };
-
-  return (
-    <div className="app-shell">
-      <Header
-        user={user}
-        onLogout={onLogout}
-        goToAdmin={goToAdmin}
-        goToUpload={goToUpload}
-      />
-
-      <main className="app-content">
-        <div className="card upload-card">
-          <h1>음성 파일 업로드</h1>
-
-          <div className="info-box">
-            <p><strong>로그인 사용자:</strong> {user?.email}</p>
-            <p><strong>STT 사용 가능:</strong> {user?.canUseStt ? "예" : "아니오"}</p>
-            <p><strong>일일 총 한도:</strong> {usage?.dailyLimit ?? user?.dailyLimit}</p>
-            <p><strong>오늘 사용 횟수:</strong> {usage?.todayUsedCount ?? 0}</p>
-            <p><strong>남은 사용 가능 횟수:</strong> {usage?.remainingCount ?? (user?.dailyLimit ?? 0)}</p>
-          </div>
-
-          {!user?.canUseStt && (
-            <div className="warning-box">
-              관리자 승인 전까지 STT 사용이 불가합니다.
-            </div>
-          )}
-
-          <input
-            type="file"
-            accept=".wav,.mp3,.m4a"
-            onChange={handleFileChange}
-            disabled={!user?.canUseStt}
-          />
-
-          <button onClick={handleUpload} disabled={loading || !user?.canUseStt}>
-            {loading ? "처리 중..." : "업로드 및 변환"}
-          </button>
-
-          {message && <p className="message">{message}</p>}
-
-          {result && (
-            <div className="result-box">
-              <h2>변환 결과</h2>
-              <p><strong>파일명:</strong> {result.filename}</p>
-
-              <div className="result-header">
-                <h3>전체 텍스트</h3>
-                <button onClick={() => copyText(result.text, "전체 텍스트")}>
-                  전체 텍스트 복사
-                </button>
-              </div>
-              <div className="result-text">{result.text}</div>
-
-              <div className="result-header">
-                <h3>요약</h3>
-                <button onClick={() => copyText(result.summary, "요약문")}>
-                  요약문 복사
-                </button>
-              </div>
-              <div className="result-text">{result.summary}</div>
-
-              <h3>키워드</h3>
-              <div className="keyword-list">
-                {result.keywords && result.keywords.length > 0 ? (
-                  result.keywords.map((keyword, index) => (
-                    <span key={index} className="keyword-item">
-                      {keyword}
-                    </span>
-                  ))
-                ) : (
-                  <span>없음</span>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
-  );
+function UploadPage({ user,onLogout,goToAdmin,goToUpload }) {
+  const [selectedFile,setSelectedFile]=useState(null); const [message,setMessage]=useState(""); const [loading,setLoading]=useState(false); const [result,setResult]=useState(null); const [usage,setUsage]=useState(null); const inputRef=useRef(null);
+  const loadUsage=async()=>{try{setUsage(await apiFetch("/api/stt/usage",{method:"GET"}))}catch(error){setMessage(error.message)}};
+  useEffect(()=>{loadUsage()},[]);
+  const selectFile=file=>{if(!file)return;setSelectedFile(file);setResult(null);setMessage("")};
+  const handleUpload=async()=>{if(!user?.canUseStt){setMessage("관리자 승인 후 이용할 수 있습니다.");return}if(!selectedFile){setMessage("음성 파일을 선택해주세요.");return}try{setLoading(true);setMessage("");const data=await uploadAudio(selectedFile);setResult(data);setUsage({dailyLimit:data.dailyLimit,todayUsedCount:data.todayUsedCount,remainingCount:data.remainingCount});setMessage("변환이 완료되었습니다.")}catch(error){setMessage(error.message||"처리 중 오류가 발생했습니다.")}finally{setLoading(false)}};
+  const copyText=async(text,label)=>{try{await navigator.clipboard.writeText(text||"");setMessage(`${label} 복사 완료`)}catch{setMessage(`${label} 복사 실패`)}};
+  const used=usage?.todayUsedCount??0; const limit=usage?.dailyLimit??user?.dailyLimit??0; const remaining=user?.isUnlimited?"∞":usage?.remainingCount??Math.max(0,limit-used); const percent=user?.isUnlimited?12:Math.min(100,limit?used/limit*100:0);
+  return <div className="app-shell"><Header user={user} onLogout={onLogout} goToAdmin={goToAdmin} goToUpload={goToUpload}/><main className="workspace"><section className="page-heading"><div><span className="eyebrow neutral">NEW TRANSCRIPTION</span><h1>음성을 선명한 기록으로</h1><p>회의, 인터뷰, 음성 메모를 업로드하고 AI 요약까지 받아보세요.</p></div><div className="service-status"><i/>AI 엔진 정상</div></section><div className="workspace-grid"><section className="panel upload-panel"><div className="panel-title"><span className="panel-icon"><Icon name="upload"/></span><div><h2>파일 업로드</h2><p>WAV, MP3, M4A · 최대 35MB</p></div></div>{!user?.canUseStt&&<div className="warning-box">관리자 승인 전까지 STT를 사용할 수 없습니다.</div>}<div className={`dropzone ${selectedFile?"has-file":""}`} onClick={()=>inputRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();selectFile(e.dataTransfer.files[0])}}><input ref={inputRef} type="file" accept=".wav,.mp3,.m4a" onChange={e=>selectFile(e.target.files[0])} hidden disabled={!user?.canUseStt}/><span className="drop-icon"><Icon name={selectedFile?"file":"upload"} size={28}/></span>{selectedFile?<><strong>{selectedFile.name}</strong><span>{(selectedFile.size/1024/1024).toFixed(1)} MB · 클릭하여 변경</span></>:<><strong>음성 파일을 여기에 놓으세요</strong><span>또는 클릭해서 컴퓨터에서 선택</span></>}</div><button className="primary-button process-button" onClick={handleUpload} disabled={loading||!user?.canUseStt}><Icon name="spark" size={18}/>{loading?"AI가 음성을 분석하고 있어요...":"AI 변환 시작"}</button>{message&&<div className="form-message">{message}</div>}</section><aside className="panel usage-panel"><div className="panel-title compact"><span className="panel-icon"><Icon name="clock"/></span><div><h2>오늘의 사용량</h2><p>{user?.isUnlimited?"무제한 플랜":"Daily quota"}</p></div></div><div className="usage-number"><strong>{remaining}</strong><span>회 남음</span></div><div className="progress"><span style={{width:`${percent}%`}}/></div><div className="usage-meta"><span>사용 {used}회</span><span>{user?.isUnlimited?"제한 없음":`총 ${limit}회`}</span></div><div className="permission-row"><span>STT 접근 권한</span><b className={user?.canUseStt?"ok":"no"}>{user?.canUseStt?"승인됨":"승인 대기"}</b></div></aside></div>{result&&<section className="result-panel"><div className="result-top"><div><span className="eyebrow neutral">TRANSCRIPTION COMPLETE</span><h2>{result.filename}</h2></div><span className="success-pill">처리 완료</span></div><div className="result-grid"><article className="result-card"><div className="result-card-head"><h3>전체 텍스트</h3><button onClick={()=>copyText(result.text,"전체 텍스트")}><Icon name="copy" size={16}/>복사</button></div><div className="result-text">{result.text}</div></article><article className="result-card accent"><div className="result-card-head"><h3>AI 핵심 요약</h3><button onClick={()=>copyText(result.summary,"요약문")}><Icon name="copy" size={16}/>복사</button></div><div className="result-text">{result.summary}</div><h4>주요 키워드</h4><div className="keyword-list">{result.keywords?.length?result.keywords.map((k,i)=><span key={i}>{k}</span>):<span>키워드 없음</span>}</div></article></div></section>}</main></div>;
 }
-
 export default UploadPage;
